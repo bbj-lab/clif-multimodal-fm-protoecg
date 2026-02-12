@@ -1,0 +1,8 @@
+training:
+  model_size: small
+  num_epochs: 10
+  learning_rate: 0.0003
+  warmup_steps: 100
+  max_tokens_per_batch: 32768
+  gradient_accumulation_steps: 1
+  bf16: true

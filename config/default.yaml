@@ -1,0 +1,62 @@
+data:
+  data_dir: ./data
+  ecg_csv: ./data/ecg_prototypes_with_shifted_dates.csv
+  output_dir: ./data/processed
+
+extraction:
+  bin_mode: hybrid
+  n_bins: 10
+  min_events: 10
+  min_admissions: 10
+  seed: 42
+  batch_size: 1000
+
+split:
+  val_fraction: 0.1
+  seed: 42
+
+labels:
+  categories:
+    - clif_only
+    - clif_partial
+
+ecg:
+  route: all_branches
+  n_similarity_bins: 10
+  lookback_days: 7
+
+time_tokens:
+  clock_interval_hours: 4
+  bucket_edges: [0, 1, 5, 15, 30, 60, 120, 240, 480]
+
+tokenization:
+  fuse_numeric_bins: false
+  min_token_count: 1
+
+training:
+  model_size: small
+  num_epochs: 10
+  learning_rate: 0.0003
+  weight_decay: 0.1
+  warmup_steps: 100
+  max_grad_norm: 1.0
+  label_loss_weight: 75.0
+  max_tokens_per_batch: 32768
+  gradient_accumulation_steps: 1
+  bf16: true
+  early_stopping: true
+  early_stopping_patience: 5
+
+inference:
+  backend: vllm
+  n_samples: 8
+  max_new_tokens: 500
+  temperature: 1.0
+  top_k: 50
+  top_p: 0.95
+
+evaluation:
+  horizons: [8, 24, 48]
+  max_days: 7
+  n_bootstrap: 1000
+  confidence: 0.95

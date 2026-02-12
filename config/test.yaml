@@ -1,0 +1,40 @@
+data:
+  data_dir: ./data
+  ecg_csv: ./data/ecg_prototypes_with_shifted_dates.csv
+  output_dir: ./data/processed_test
+
+extraction:
+  n_patients: 50
+  bin_mode: hybrid
+  n_bins: 10
+  min_events: 2
+  min_admissions: 5
+  seed: 42
+  batch_size: 50
+
+split:
+  val_fraction: 0.2
+  seed: 42
+
+ecg:
+  route: all_branches
+  n_similarity_bins: 5
+
+training:
+  model_size: tiny
+  num_epochs: 3
+  learning_rate: 0.001
+  warmup_steps: 10
+  bf16: false
+  early_stopping: true
+  early_stopping_patience: 2
+
+inference:
+  backend: vllms
+  n_samples: 4
+  max_new_tokens: 100
+
+evaluation:
+  horizons: [8, 24]
+  max_days: 3
+  n_bootstrap: 100
