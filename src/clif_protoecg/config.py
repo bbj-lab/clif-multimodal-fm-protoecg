@@ -99,7 +99,7 @@ class TrainingConfig(BaseModel):
 class InferenceConfig(BaseModel):
     """Step 7: inference settings."""
 
-    backend: Literal["native", "vllm"] = "vllm"
+    backend: Literal["native", "vllm", "sglang"] = "vllm"
     n_samples: int = 8
     max_new_tokens: int = 500
     temperature: float = 1.0
@@ -115,6 +115,8 @@ class EvaluationConfig(BaseModel):
     max_days: int = 7
     n_bootstrap: int = 1000
     confidence: float = 0.95
+    inference_patients: int | None = None
+    samples_per_patient: int | None = None
 
 
 class PipelineConfig(BaseModel):

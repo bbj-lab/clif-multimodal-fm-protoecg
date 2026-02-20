@@ -30,7 +30,7 @@ training:
   early_stopping_patience: 2
 
 inference:
-  backend: vllms
+  backend: vllm
   n_samples: 4
   max_new_tokens: 100
 

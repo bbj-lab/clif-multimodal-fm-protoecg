@@ -16,7 +16,7 @@ def create_inference_engine(
     """Create an inference engine by backend name.
 
     Args:
-        backend: "native" or "vllm".
+        backend: "native", "vllm", or "sglang".
         model_path: Path to HF model checkpoint.
         device: Torch device for native backend.
         **kwargs: Extra args forwarded to the engine.
@@ -34,7 +34,19 @@ def create_inference_engine(
     elif backend == "vllm":
         from clif_protoecg.evaluation.inference.vllm_engine import VLLMInferenceEngine
 
-        return VLLMInferenceEngine(model_path=str(model_path), **kwargs)
+        vllm_kwargs = {k: v for k, v in kwargs.items()
+                       if k in ("max_model_len", "gpu_memory_utilization", "tensor_parallel_size")}
+        return VLLMInferenceEngine(model_path=str(model_path), **vllm_kwargs)
+
+    elif backend == "sglang":
+        from clif_protoecg.evaluation.inference.sglang_engine import SGLangInferenceEngine
+
+        known = ("max_model_len", "gpu_memory_utilization", "tensor_parallel_size")
+        sglang_kwargs = {k: v for k, v in kwargs.items() if k in known}
+        # Pass remaining kwargs through (e.g. disable_cuda_graph, attention_backend)
+        extra = {k: v for k, v in kwargs.items() if k not in known}
+        sglang_kwargs.update(extra)
+        return SGLangInferenceEngine(model_path=str(model_path), **sglang_kwargs)
 
     else:
-        raise ValueError(f"Unknown inference backend: {backend!r}. Use 'native' or 'vllm'.")
+        raise ValueError(f"Unknown inference backend: {backend!r}. Use 'native', 'vllm', or 'sglang'.")

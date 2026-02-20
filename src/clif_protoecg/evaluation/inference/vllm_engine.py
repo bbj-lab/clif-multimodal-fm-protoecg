@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from clif_protoecg.evaluation.inference.base import InferenceEngine, GenerationConfig
+from clif_protoecg.evaluation.inference.base import InferenceEngine, GenerationConfig, truncate_at_clock_limit
 
 
 class VLLMInferenceEngine(InferenceEngine):
@@ -70,7 +70,7 @@ class VLLMInferenceEngine(InferenceEngine):
             token_ids = list(completion.token_ids)
             # Post-hoc clock-based truncation
             if clock_token_ids and max_clock_tokens is not None:
-                token_ids = _truncate_at_clock_limit(
+                token_ids = truncate_at_clock_limit(
                     token_ids, clock_token_ids, max_clock_tokens
                 )
             samples.append(token_ids)
@@ -109,25 +109,10 @@ class VLLMInferenceEngine(InferenceEngine):
             for completion in output.outputs:
                 token_ids = list(completion.token_ids)
                 if clock_token_ids and max_clock_tokens is not None:
-                    token_ids = _truncate_at_clock_limit(
+                    token_ids = truncate_at_clock_limit(
                         token_ids, clock_token_ids, max_clock_tokens
                     )
                 context_samples.append(token_ids)
             results.append(context_samples)
 
         return results
-
-
-def _truncate_at_clock_limit(
-    token_ids: list[int],
-    clock_ids: set[int],
-    max_clocks: int,
-) -> list[int]:
-    """Truncate a generated sequence at the Nth clock token."""
-    count = 0
-    for i, tid in enumerate(token_ids):
-        if tid in clock_ids:
-            count += 1
-            if count >= max_clocks:
-                return token_ids[: i + 1]
-    return token_ids

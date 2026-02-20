@@ -7,9 +7,9 @@ from pathlib import Path
 from transformers import LlamaConfig, LlamaForCausalLM
 
 SIZE_PRESETS: dict[str, dict] = {
-    "tiny":   {"d_model": 128,  "n_layers": 4,  "n_heads": 4,  "n_kv_heads": 2,  "d_ff": 512,  "max_pos": 8192},
-    "small":  {"d_model": 256,  "n_layers": 8,  "n_heads": 8,  "n_kv_heads": 4,  "d_ff": 1024, "max_pos": 8192},
-    "medium": {"d_model": 512,  "n_layers": 12, "n_heads": 16, "n_kv_heads": 4,  "d_ff": 2048, "max_pos": 16384},
+    "tiny":   {"d_model": 128,  "n_layers": 4,  "n_heads": 4,  "n_kv_heads": 2,  "d_ff": 512,  "max_pos": 32768},
+    "small":  {"d_model": 256,  "n_layers": 8,  "n_heads": 8,  "n_kv_heads": 4,  "d_ff": 1024, "max_pos": 32768},
+    "medium": {"d_model": 512,  "n_layers": 12, "n_heads": 16, "n_kv_heads": 4,  "d_ff": 2048, "max_pos": 32768},
     "large":  {"d_model": 768,  "n_layers": 12, "n_heads": 12, "n_kv_heads": 4,  "d_ff": 3072, "max_pos": 32768},
 }
 

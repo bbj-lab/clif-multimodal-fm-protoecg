@@ -17,6 +17,21 @@ class GenerationConfig:
     top_p: float = 0.95
 
 
+def truncate_at_clock_limit(
+    token_ids: list[int],
+    clock_ids: set[int],
+    max_clocks: int,
+) -> list[int]:
+    """Truncate a generated sequence at the Nth clock token."""
+    count = 0
+    for i, tid in enumerate(token_ids):
+        if tid in clock_ids:
+            count += 1
+            if count >= max_clocks:
+                return token_ids[: i + 1]
+    return token_ids
+
+
 class InferenceEngine(ABC):
     """Abstract interface for model inference."""
 

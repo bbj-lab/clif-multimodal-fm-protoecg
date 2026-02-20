@@ -609,6 +609,9 @@ def train(
 
     stage = TrainingStage()
     checkpoint_dir = cfg.checkpoints_dir / f"{route}_{size}"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    cfg.to_yaml(checkpoint_dir / "pipeline_config.yaml")
+    logger.info(f"Saved pipeline config -> {checkpoint_dir / 'pipeline_config.yaml'}")
     result = stage.run(
         input_path=vocab_dir,
         output_path=checkpoint_dir,
@@ -646,6 +649,12 @@ def evaluate(
     ] = "all_branches",
     n_patients: Annotated[
         Optional[int], typer.Option("--n-patients", "-n", help="Use output dir for N-patient test run")
+    ] = None,
+    inference_patients: Annotated[
+        Optional[int], typer.Option("--inference-patients", help="Limit number of test patients for evaluation")
+    ] = None,
+    n_samples: Annotated[
+        Optional[int], typer.Option("--n-samples", help="Number of MC samples per prediction window")
     ] = None,
 ) -> None:
     """Step 7-8: Run inference and evaluation."""
@@ -723,6 +732,15 @@ def evaluate(
             "timestamps": timestamps,
         })
 
+    # Resolve effective inference_patients and n_samples (CLI > config)
+    eff_inference_patients = inference_patients or cfg.evaluation.inference_patients
+    eff_n_samples = n_samples or cfg.evaluation.samples_per_patient or cfg.inference.n_samples
+
+    # Subsample test patients if requested
+    if eff_inference_patients is not None and eff_inference_patients < len(test_data):
+        logger.info(f"Subsampling {eff_inference_patients} of {len(test_data)} test patients")
+        test_data = test_data[:eff_inference_patients]
+
     # Identify label token IDs (name -> id mapping for evaluation)
     label_token_ids = {
         tok: tid for tok, tid in vocab.token_to_id.items()
@@ -734,7 +752,7 @@ def evaluate(
     logger.info(
         f"Evaluation: model={model_path}, backend={cfg.inference.backend}, "
         f"device={device}, horizons={cfg.evaluation.horizons}, "
-        f"n_samples={cfg.inference.n_samples}"
+        f"n_samples={eff_n_samples}, patients={len(test_data)}"
     )
 
     stage = EvaluationStage()
@@ -746,7 +764,7 @@ def evaluate(
         test_data=test_data,
         label_token_ids=label_token_ids,
         horizons=cfg.evaluation.horizons,
-        n_samples=cfg.inference.n_samples,
+        n_samples=eff_n_samples,
         max_new_tokens=cfg.inference.max_new_tokens,
         backend=cfg.inference.backend,
         device=device,
@@ -755,10 +773,11 @@ def evaluate(
     if result.success:
         logger.info(f"Evaluation complete: {eval_dir / 'metrics.json'}")
         metrics = json.loads((eval_dir / "metrics.json").read_text())
+        max_key_len = max(len(k) for k in metrics) if metrics else 0
         for key, vals in metrics.items():
             auroc = vals.get("auroc")
-            auroc_str = f"{auroc:.4f}" if auroc is not None else "N/A"
-            logger.info(f"  {key}: AUROC={auroc_str}, n={vals['n_total']}")
+            auroc_str = f"{auroc:.4f}" if auroc is not None else "   N/A"
+            logger.info(f"  {key:<{max_key_len}}  AUROC={auroc_str}  n={vals['n_total']}")
     else:
         logger.error(f"Evaluation failed: {result.metrics}")
 

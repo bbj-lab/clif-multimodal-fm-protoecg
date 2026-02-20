@@ -4,13 +4,17 @@ set -euo pipefail
 SIZE=${1:-tiny}
 N_PATIENTS=${2:-10000}
 FORCE=false
+INFERENCE_PATIENTS=""
+N_SAMPLES=""
 CONFIG=config/subset_run.yaml
 ROUTES=("no_ecg" "fusion_class" "all_branches")
 
-# Parse --force flag from any argument position
+# Parse flags from any argument position
 for arg in "$@"; do
     case "$arg" in
         --force) FORCE=true ;;
+        --inference-patients=*) INFERENCE_PATIENTS="${arg#*=}" ;;
+        --n-samples=*) N_SAMPLES="${arg#*=}" ;;
     esac
 done
 
@@ -50,9 +54,13 @@ for ROUTE in "${ROUTES[@]}"; do
         echo "==> Skipping train $ROUTE (found $CKPT). Use --force to re-run."
     fi
 
+    EVAL_ARGS=(--config "$CONFIG" --size "$SIZE" --route "$ROUTE" --n-patients "$N_PATIENTS")
+    [[ -n "$INFERENCE_PATIENTS" ]] && EVAL_ARGS+=(--inference-patients "$INFERENCE_PATIENTS")
+    [[ -n "$N_SAMPLES" ]] && EVAL_ARGS+=(--n-samples "$N_SAMPLES")
+
     if [[ "$FORCE" == true ]] || [[ ! -f "$METRICS" ]]; then
         echo "==> Evaluating route=$ROUTE size=$SIZE..."
-        protoecg-pipeline evaluate --config "$CONFIG" --size "$SIZE" --route "$ROUTE" --n-patients "$N_PATIENTS"
+        protoecg-pipeline evaluate "${EVAL_ARGS[@]}"
     else
         echo "==> Skipping evaluate $ROUTE (found $METRICS). Use --force to re-run."
     fi

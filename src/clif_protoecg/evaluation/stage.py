@@ -14,10 +14,7 @@ from clif_protoecg.core.constants import HORIZON_TO_CLOCK_TOKENS
 from clif_protoecg.core.stage import BaseStage, StageResult
 from clif_protoecg.evaluation.inference.base import GenerationConfig
 from clif_protoecg.evaluation.inference.factory import create_inference_engine
-from clif_protoecg.evaluation.inference.vllm_engine import (
-    VLLMInferenceEngine,
-    _truncate_at_clock_limit,
-)
+from clif_protoecg.evaluation.inference.base import truncate_at_clock_limit
 from clif_protoecg.evaluation.metrics.aggregator import (
     PredictionResult,
     aggregate_metrics,
@@ -77,7 +74,21 @@ class EvaluationStage(BaseStage):
         if vocab is None:
             vocab = Vocabulary.load(input_path.parent)
 
-        engine = create_inference_engine(backend, input_path, device=device)
+        # Read model's max context length from config
+        import json as _json
+
+        model_config_path = input_path / "config.json"
+        if model_config_path.exists():
+            model_max_len = _json.loads(model_config_path.read_text()).get(
+                "max_position_embeddings", 8192
+            )
+        else:
+            model_max_len = 8192
+        # Reserve room for generation
+        max_context_len = model_max_len - max_new_tokens
+
+        engine = create_inference_engine(backend, input_path, device=device,
+                                         max_model_len=model_max_len, **kwargs)
 
         # Identify special tokens
         clock_ids = {v for k, v in vocab.token_to_id.items() if k.startswith("CLOCK//")}
@@ -106,6 +117,7 @@ class EvaluationStage(BaseStage):
         # Build flat task list (one per unique window)
         tasks: list[_Task] = []
         patients_with_windows = 0
+        n_truncated = 0
         for p_idx, patient in enumerate(test_data):
             windows = create_midnight_windows(
                 patient["token_ids"],
@@ -116,15 +128,25 @@ class EvaluationStage(BaseStage):
             if windows:
                 patients_with_windows += 1
             for window in windows:
+                ctx = window.context_ids
+                if len(ctx) > max_context_len:
+                    ctx = ctx[-max_context_len:]  # keep most recent tokens
+                    n_truncated += 1
                 tasks.append(
                     _Task(
                         patient_idx=p_idx,
                         window_id=window.window_id,
-                        context_ids=window.context_ids,
+                        context_ids=ctx,
                         context_end_time=window.context_end_time,
                         hospitalization_id=window.hospitalization_id,
                     )
                 )
+
+        if n_truncated:
+            logger.info(
+                f"Truncated {n_truncated} contexts to {max_context_len} tokens "
+                f"(model max={model_max_len}, reserved {max_new_tokens} for generation)"
+            )
 
         total_windows = len(tasks)
         total_eval_tasks = total_windows * len(horizons)
@@ -135,11 +157,11 @@ class EvaluationStage(BaseStage):
         )
 
         # Generate samples — one call per window, reuse across horizons
-        use_batched = isinstance(engine, VLLMInferenceEngine)
+        use_batched = hasattr(engine, "generate_batch")
 
         if use_batched:
-            # Batch all windows into one vLLM call
-            logger.info(f"Batched vLLM generation: {total_windows} windows x {n_samples} samples")
+            # Batch all windows into one engine call
+            logger.info(f"Batched generation ({backend}): {total_windows} windows x {n_samples} samples")
             all_contexts = [t.context_ids for t in tasks]
             all_samples = engine.generate_batch(
                 contexts=all_contexts,
@@ -176,7 +198,7 @@ class EvaluationStage(BaseStage):
                 # Truncate samples at clock limit for this horizon
                 if clock_ids and max_clocks is not None:
                     truncated = [
-                        _truncate_at_clock_limit(s, clock_ids, max_clocks)
+                        truncate_at_clock_limit(s, clock_ids, max_clocks)
                         for s in samples
                     ]
                 else:

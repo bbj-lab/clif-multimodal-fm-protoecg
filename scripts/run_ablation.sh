@@ -4,12 +4,16 @@ set -euo pipefail
 CONFIG=config/full_run.yaml
 SIZE=${1:-small}
 FORCE=false
+INFERENCE_PATIENTS=""
+N_SAMPLES=""
 ROUTES=("no_ecg" "fusion_class" "all_branches")
 
-# Parse --force flag from any argument position
+# Parse flags from any argument position
 for arg in "$@"; do
     case "$arg" in
         --force) FORCE=true ;;
+        --inference-patients=*) INFERENCE_PATIENTS="${arg#*=}" ;;
+        --n-samples=*) N_SAMPLES="${arg#*=}" ;;
     esac
 done
 
@@ -24,21 +28,21 @@ print(cfg.get('data', {}).get('output_dir', './data/processed'))
 SEQ="$OUT/sequences.parquet"
 TOK="$OUT/tokenized/all_tokens.parquet"
 
-# Step 1-2: Extract (once — route-independent)
-if [[ "$FORCE" == true ]] || [[ ! -f "$SEQ" ]]; then
-    echo "==> Extracting..."
-    protoecg-pipeline extract --config "$CONFIG" --workers 0
-else
-    echo "==> Skipping extract (found $SEQ). Use --force to re-run."
-fi
+# # Step 1-2: Extract (once — route-independent)
+# if [[ "$FORCE" == true ]] || [[ ! -f "$SEQ" ]]; then
+#     echo "==> Extracting..."
+#     protoecg-pipeline extract --config "$CONFIG" --workers 0
+# else
+#     echo "==> Skipping extract (found $SEQ). Use --force to re-run."
+# fi
 
-# Step 3: Tokenize (once — route-independent)
-if [[ "$FORCE" == true ]] || [[ ! -f "$TOK" ]]; then
-    echo "==> Tokenizing..."
-    protoecg-pipeline tokenize --config "$CONFIG"
-else
-    echo "==> Skipping tokenize (found $TOK). Use --force to re-run."
-fi
+# # Step 3: Tokenize (once — route-independent)
+# if [[ "$FORCE" == true ]] || [[ ! -f "$TOK" ]]; then
+#     echo "==> Tokenizing..."
+#     protoecg-pipeline tokenize --config "$CONFIG"
+# else
+#     echo "==> Skipping tokenize (found $TOK). Use --force to re-run."
+# fi
 
 # Step 4-5: Train + Evaluate per route
 for ROUTE in "${ROUTES[@]}"; do
@@ -51,10 +55,16 @@ for ROUTE in "${ROUTES[@]}"; do
     else
         echo "==> Skipping train $ROUTE (found $CKPT). Use --force to re-run."
     fi
+done 
+
+for ROUTE in "${ROUTES[@]}"; do
+    EVAL_ARGS=(--config "$CONFIG" --size "$SIZE" --route "$ROUTE")
+    [[ -n "$INFERENCE_PATIENTS" ]] && EVAL_ARGS+=(--inference-patients "$INFERENCE_PATIENTS")
+    [[ -n "$N_SAMPLES" ]] && EVAL_ARGS+=(--n-samples "$N_SAMPLES")
 
     if [[ "$FORCE" == true ]] || [[ ! -f "$METRICS" ]]; then
         echo "==> Evaluating route=$ROUTE size=$SIZE..."
-        protoecg-pipeline evaluate --config "$CONFIG" --size "$SIZE" --route "$ROUTE"
+        protoecg-pipeline evaluate "${EVAL_ARGS[@]}"
     else
         echo "==> Skipping evaluate $ROUTE (found $METRICS). Use --force to re-run."
     fi
