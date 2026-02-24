@@ -31,16 +31,25 @@ def _load_config(config_path: Path | None = None):
 @app.command()
 def extract(
     config: Annotated[
-        Optional[Path], typer.Option("--config", "-c", help="Path to pipeline config YAML")
+        Optional[Path],
+        typer.Option("--config", "-c", help="Path to pipeline config YAML"),
     ] = None,
     n_patients: Annotated[
         Optional[int], typer.Option("--n-patients", "-n", help="Limit to N patients")
     ] = None,
     workers: Annotated[
-        int, typer.Option("--workers", "-w", help="Number of parallel workers for post-processing (0=auto)")
+        int,
+        typer.Option(
+            "--workers",
+            "-w",
+            help="Number of parallel workers for post-processing (0=auto)",
+        ),
     ] = 0,
     chunk_size: Annotated[
-        int, typer.Option("--chunk-size", help="Hospitalizations per chunk (0=use config default)")
+        int,
+        typer.Option(
+            "--chunk-size", help="Hospitalizations per chunk (0=use config default)"
+        ),
     ] = 0,
 ) -> None:
     """Step 1-2: Extract CLIF data → MEDS sequences + labels."""
@@ -84,11 +93,15 @@ def extract(
 
     # ── Split patients ──────────────────────────────────────────────
     logger.info("Splitting patients...")
-    splits = create_patient_splits(hosp_df, val_fraction=cfg.split.val_fraction, seed=cfg.split.seed)
+    splits = create_patient_splits(
+        hosp_df, val_fraction=cfg.split.val_fraction, seed=cfg.split.seed
+    )
     metadata_dir = cfg.metadata_dir
     metadata_dir.mkdir(parents=True, exist_ok=True)
     splits.save(metadata_dir / "splits.json")
-    logger.info(f"Split: train={len(splits.train):,}, val={len(splits.val):,}, test={len(splits.test):,}")
+    logger.info(
+        f"Split: train={len(splits.train):,}, val={len(splits.val):,}, test={len(splits.test):,}"
+    )
 
     # Limit patients if requested — sample proportionally from each split
     if n_patients is not None:
@@ -116,8 +129,12 @@ def extract(
         # All patients — just get all hosp IDs without expensive is_in filter
         all_hosp_ids = hosp_df["hospitalization_id"].unique().sort().to_list()
         train_hosp_ids = (
-            hosp_df.filter(pl.col("patient_id").is_in(train_patients))
-            ["hospitalization_id"].unique().sort().to_list()
+            hosp_df.filter(pl.col("patient_id").is_in(train_patients))[
+                "hospitalization_id"
+            ]
+            .unique()
+            .sort()
+            .to_list()
         )
     else:
         all_hosp_ids = loader.get_hospitalization_ids(all_patients)
@@ -134,7 +151,12 @@ def extract(
 
     # ── Bin edges (no preload needed — uses lazy scan) ──────────────
     logger.info("Computing bin edges...")
-    bin_edges = compute_bin_edges(loader, train_hosp_ids, bin_mode=cfg.extraction.bin_mode, n_bins=cfg.extraction.n_bins)
+    bin_edges = compute_bin_edges(
+        loader,
+        train_hosp_ids,
+        bin_mode=cfg.extraction.bin_mode,
+        n_bins=cfg.extraction.n_bins,
+    )
     bin_edges.save(metadata_dir / "bin_edges.json")
 
     # ── Labels ──────────────────────────────────────────────────────
@@ -154,7 +176,9 @@ def extract(
             hosp_df=hosp_df,
             lookback_days=cfg.ecg.lookback_days,
         )
-        ecg_tokenizer.compute_similarity_quantiles(ecg_df, n_bins=cfg.ecg.n_similarity_bins)
+        ecg_tokenizer.compute_similarity_quantiles(
+            ecg_df, n_bins=cfg.ecg.n_similarity_bins
+        )
         logger.info(f"ECG records: {len(ecg_df):,} (lookback={cfg.ecg.lookback_days}d)")
     else:
         logger.warning(f"ECG CSV not found at {ecg_csv}, skipping ECG tokens")
@@ -171,8 +195,7 @@ def extract(
     }
     patient_df = loader.load("patient")
     patient_lookup: dict[str, dict] = {
-        row["patient_id"]: row
-        for row in patient_df.iter_rows(named=True)
+        row["patient_id"]: row for row in patient_df.iter_rows(named=True)
     }
 
     # ── Determine chunks ───────────────────────────────────────────
@@ -188,13 +211,21 @@ def extract(
 
     # ── Shared state for postprocessing ────────────────────────────
     from clif_protoecg.stages.postprocess import (
-        init_context, process_hospitalization, build_task,
+        init_context,
+        process_hospitalization,
+        build_task,
     )
 
     _LABEL_TABLES = [
-        "adt", "vitals", "labs", "medication_admin_continuous",
-        "respiratory_support", "patient_assessments",
-        "position", "crrt_therapy", "ecmo_mcs",
+        "adt",
+        "vitals",
+        "labs",
+        "medication_admin_continuous",
+        "respiratory_support",
+        "patient_assessments",
+        "position",
+        "crrt_therapy",
+        "ecmo_mcs",
     ]
 
     output_dir = cfg.processed_dir
@@ -229,7 +260,11 @@ def extract(
         logger.info("Building base events (vectorized)...")
         t_extract = time.time()
         chunk_sequences = build_all_base_events(
-            chunk_hids, loader, hosp_lookup, patient_lookup, hosp_to_patient,
+            chunk_hids,
+            loader,
+            hosp_lookup,
+            patient_lookup,
+            hosp_to_patient,
             profile,
         )
         chunk_base_events = sum(len(seq) for seq in chunk_sequences.values())
@@ -246,7 +281,9 @@ def extract(
             for group_df in ecg_filtered.partition_by("hospitalization_id"):
                 if len(group_df) > 0:
                     ecg_partition[group_df["hospitalization_id"][0]] = group_df
-            logger.info(f"ECG partition: {len(ecg_partition)} hosps ({len(ecg_filtered):,} rows)")
+            logger.info(
+                f"ECG partition: {len(ecg_partition)} hosps ({len(ecg_filtered):,} rows)"
+            )
 
         # hosp_single_row
         hosp_single_row: dict[str, pl.DataFrame] = {}
@@ -262,13 +299,17 @@ def extract(
         try:
             cs_full = loader.load("code_status")
             if "hospitalization_id" in cs_full.columns:
-                cs_filtered = cs_full.filter(pl.col("hospitalization_id").is_in(chunk_hids))
+                cs_filtered = cs_full.filter(
+                    pl.col("hospitalization_id").is_in(chunk_hids)
+                )
                 for group_df in cs_filtered.partition_by("hospitalization_id"):
                     if len(group_df) > 0:
                         cs_partition[group_df["hospitalization_id"][0]] = group_df
                 cs_empty = cs_filtered.clear()
             else:
-                pids = list({hosp_to_patient[h] for h in chunk_hids if h in hosp_to_patient})
+                pids = list(
+                    {hosp_to_patient[h] for h in chunk_hids if h in hosp_to_patient}
+                )
                 cs_filtered = cs_full.filter(pl.col("patient_id").is_in(pids))
                 for group_df in cs_filtered.partition_by("patient_id"):
                     if len(group_df) > 0:
@@ -349,7 +390,8 @@ def extract(
                 n_cpus = os.cpu_count() or 1
                 try:
                     import psutil
-                    avail_gb = psutil.virtual_memory().available / (1024 ** 3)
+
+                    avail_gb = psutil.virtual_memory().available / (1024**3)
                 except ImportError:
                     avail_gb = 128.0
                 # Context is now tiny (just label_eval + ecg_tokenizer).
@@ -431,9 +473,7 @@ def extract(
     # ── Summary ─────────────────────────────────────────────────────
     logger.info(f"Saved {total_sequences} sequences -> {seq_path}")
     avg_events = total_events / max(total_sequences, 1)
-    logger.info(
-        f"Events: {total_events:,} total, {avg_events:,.0f} avg/hosp"
-    )
+    logger.info(f"Events: {total_events:,} total, {avg_events:,.0f} avg/hosp")
     if label_stats["total_labels"] > 0:
         logger.info(
             f"Labels: {label_stats['hosps_with_labels']}/{total_sequences} hosps, "
@@ -456,16 +496,23 @@ def extract(
 @app.command()
 def tokenize(
     config: Annotated[
-        Optional[Path], typer.Option("--config", "-c", help="Path to pipeline config YAML")
+        Optional[Path],
+        typer.Option("--config", "-c", help="Path to pipeline config YAML"),
     ] = None,
     n_patients: Annotated[
-        Optional[int], typer.Option("--n-patients", "-n", help="Use output dir for N-patient test run")
+        Optional[int],
+        typer.Option(
+            "--n-patients", "-n", help="Use output dir for N-patient test run"
+        ),
     ] = None,
 ) -> None:
     """Step 5: Build vocabulary and tokenize event sequences to token IDs."""
     from clif_protoecg.data.split import SplitInfo
     from clif_protoecg.data.sequences_io import load_sequences
-    from clif_protoecg.tokenization.stage import build_vocabulary_from_sequences, tokenize_and_write
+    from clif_protoecg.tokenization.stage import (
+        build_vocabulary_from_sequences,
+        tokenize_and_write,
+    )
 
     cfg = _load_config(config)
     if n_patients is not None:
@@ -483,12 +530,16 @@ def tokenize(
     # Load splits to build vocab from training data only
     splits_path = cfg.metadata_dir / "splits.json"
     from clif_protoecg.core.artifacts import SplitInfo as SI
+
     splits = SI.load(splits_path)
 
     from clif_protoecg.data.loader import CLIFDataLoader
+
     loader = CLIFDataLoader(cfg.data.data_dir)
     train_hosp_ids = set(loader.get_hospitalization_ids(splits.train))
-    train_sequences = [seq for hid, seq in all_sequences.items() if hid in train_hosp_ids]
+    train_sequences = [
+        seq for hid, seq in all_sequences.items() if hid in train_hosp_ids
+    ]
     logger.info(f"Building vocabulary from {len(train_sequences)} training sequences")
 
     vocab = build_vocabulary_from_sequences(
@@ -508,7 +559,9 @@ def tokenize(
         cfg.tokenized_dir / "all_tokens.parquet",
         fuse_bins=cfg.tokenization.fuse_numeric_bins,
     )
-    logger.info(f"Tokenized {n} sequences -> {cfg.tokenized_dir / 'all_tokens.parquet'}")
+    logger.info(
+        f"Tokenized {n} sequences -> {cfg.tokenized_dir / 'all_tokens.parquet'}"
+    )
 
 
 # ──────────────────────── Step 6: Train ──────────────────────────
@@ -517,19 +570,27 @@ def tokenize(
 @app.command()
 def train(
     config: Annotated[
-        Optional[Path], typer.Option("--config", "-c", help="Path to pipeline config YAML")
+        Optional[Path],
+        typer.Option("--config", "-c", help="Path to pipeline config YAML"),
     ] = None,
     size: Annotated[
         str, typer.Option("--size", "-s", help="Model size: tiny, small, medium, large")
     ] = "tiny",
     route: Annotated[
-        str, typer.Option("--route", "-r", help="ECG route: no_ecg, fusion_class, all_branches")
+        str,
+        typer.Option(
+            "--route", "-r", help="ECG route: no_ecg, fusion_class, all_branches"
+        ),
     ] = "all_branches",
     n_patients: Annotated[
-        Optional[int], typer.Option("--n-patients", "-n", help="Use output dir for N-patient test run")
+        Optional[int],
+        typer.Option(
+            "--n-patients", "-n", help="Use output dir for N-patient test run"
+        ),
     ] = None,
     wandb_project: Annotated[
-        Optional[str], typer.Option("--wandb-project", help="wandb project name (None to disable)")
+        Optional[str],
+        typer.Option("--wandb-project", help="wandb project name (None to disable)"),
     ] = "protoecg-fm",
     no_wandb: Annotated[
         bool, typer.Option("--no-wandb", help="Disable wandb logging")
@@ -579,10 +640,14 @@ def train(
     logger.info(f"Train: {len(train_seqs)}, Val: {len(val_seqs)}, Route: {route}")
 
     # Identify label token IDs
-    label_token_ids = {tid for tok, tid in vocab.token_to_id.items() if tok.startswith("LABEL//")}
+    label_token_ids = {
+        tid for tok, tid in vocab.token_to_id.items() if tok.startswith("LABEL//")
+    }
 
     # Build TrainerConfig
-    effective_wandb = None if no_wandb else (wandb_project or cfg.training.wandb_project)
+    effective_wandb = (
+        None if no_wandb else (wandb_project or cfg.training.wandb_project)
+    )
     trainer_config = TrainerConfig(
         learning_rate=cfg.training.learning_rate,
         weight_decay=cfg.training.weight_decay,
@@ -633,28 +698,36 @@ def train(
 @app.command()
 def evaluate(
     config: Annotated[
-        Optional[Path], typer.Option("--config", "-c", help="Path to pipeline config YAML")
+        Optional[Path],
+        typer.Option("--config", "-c", help="Path to pipeline config YAML"),
     ] = None,
     model_path: Annotated[
-        Optional[Path], typer.Option("--model-path", "-m", help="Path to model checkpoint")
+        Optional[Path],
+        typer.Option("--model-path", "-m", help="Path to model checkpoint"),
     ] = None,
     backend: Annotated[
-        Optional[str], typer.Option("--backend", "-b", help="Inference backend: native, vllm")
+        Optional[str],
+        typer.Option("--backend", "-b", help="Inference backend: native, vllm"),
     ] = None,
-    size: Annotated[
-        str, typer.Option("--size", "-s", help="Model size")
-    ] = "tiny",
+    size: Annotated[str, typer.Option("--size", "-s", help="Model size")] = "tiny",
     route: Annotated[
         str, typer.Option("--route", "-r", help="ECG route")
     ] = "all_branches",
     n_patients: Annotated[
-        Optional[int], typer.Option("--n-patients", "-n", help="Use output dir for N-patient test run")
+        Optional[int],
+        typer.Option(
+            "--n-patients", "-n", help="Use output dir for N-patient test run"
+        ),
     ] = None,
     inference_patients: Annotated[
-        Optional[int], typer.Option("--inference-patients", help="Limit number of test patients for evaluation")
+        Optional[int],
+        typer.Option(
+            "--inference-patients", help="Limit number of test patients for evaluation"
+        ),
     ] = None,
     n_samples: Annotated[
-        Optional[int], typer.Option("--n-samples", help="Number of MC samples per prediction window")
+        Optional[int],
+        typer.Option("--n-samples", help="Number of MC samples per prediction window"),
     ] = None,
 ) -> None:
     """Step 7-8: Run inference and evaluation."""
@@ -713,7 +786,8 @@ def evaluate(
             if ecg_filter.filtered_ids:
                 # Rebuild timestamps matching filtered token_ids
                 ts_filtered = [
-                    ts for tid, ts in zip(row["token_ids"], raw_ts)
+                    ts
+                    for tid, ts in zip(row["token_ids"], raw_ts)
                     if tid not in ecg_filter.filtered_ids
                 ]
             else:
@@ -726,25 +800,30 @@ def evaluate(
             logger.warning("No timestamps found — re-run 'tokenize' to generate them")
             return
 
-        test_data.append({
-            "hospitalization_id": row["hospitalization_id"],
-            "token_ids": token_ids,
-            "timestamps": timestamps,
-        })
+        test_data.append(
+            {
+                "hospitalization_id": row["hospitalization_id"],
+                "token_ids": token_ids,
+                "timestamps": timestamps,
+            }
+        )
 
     # Resolve effective inference_patients and n_samples (CLI > config)
     eff_inference_patients = inference_patients or cfg.evaluation.inference_patients
-    eff_n_samples = n_samples or cfg.evaluation.samples_per_patient or cfg.inference.n_samples
+    eff_n_samples = (
+        n_samples or cfg.evaluation.samples_per_patient or cfg.inference.n_samples
+    )
 
     # Subsample test patients if requested
     if eff_inference_patients is not None and eff_inference_patients < len(test_data):
-        logger.info(f"Subsampling {eff_inference_patients} of {len(test_data)} test patients")
+        logger.info(
+            f"Subsampling {eff_inference_patients} of {len(test_data)} test patients"
+        )
         test_data = test_data[:eff_inference_patients]
 
     # Identify label token IDs (name -> id mapping for evaluation)
     label_token_ids = {
-        tok: tid for tok, tid in vocab.token_to_id.items()
-        if tok.startswith("LABEL//")
+        tok: tid for tok, tid in vocab.token_to_id.items() if tok.startswith("LABEL//")
     }
     logger.info(f"Labels: {list(label_token_ids.keys())}")
 
@@ -777,7 +856,9 @@ def evaluate(
         for key, vals in metrics.items():
             auroc = vals.get("auroc")
             auroc_str = f"{auroc:.4f}" if auroc is not None else "   N/A"
-            logger.info(f"  {key:<{max_key_len}}  AUROC={auroc_str}  n={vals['n_total']}")
+            logger.info(
+                f"  {key:<{max_key_len}}  AUROC={auroc_str}  n={vals['n_total']}"
+            )
     else:
         logger.error(f"Evaluation failed: {result.metrics}")
 
@@ -788,7 +869,8 @@ def evaluate(
 @app.command()
 def ablation(
     config: Annotated[
-        Optional[Path], typer.Option("--config", "-c", help="Path to pipeline config YAML")
+        Optional[Path],
+        typer.Option("--config", "-c", help="Path to pipeline config YAML"),
     ] = None,
     routes: Annotated[
         str, typer.Option("--routes", help="Comma-separated ECG routes")
@@ -796,11 +878,10 @@ def ablation(
     sizes: Annotated[
         str, typer.Option("--sizes", help="Comma-separated model sizes")
     ] = "tiny",
-    mode: Annotated[
-        str, typer.Option("--mode", help="test or full")
-    ] = "test",
+    mode: Annotated[str, typer.Option("--mode", help="test or full")] = "test",
     n_patients: Annotated[
-        Optional[int], typer.Option("--n-patients", "-n", help="Limit patients for test mode")
+        Optional[int],
+        typer.Option("--n-patients", "-n", help="Limit patients for test mode"),
     ] = 100,
 ) -> None:
     """Run ablation study across ECG routes and model sizes."""
@@ -819,13 +900,128 @@ def ablation(
     runner.run()
 
 
+# ──────────────────────── Labels ──────────────────────────
+
+
+@app.command()
+def labels(
+    config: Annotated[
+        Optional[Path],
+        typer.Option("--config", "-c", help="Path to pipeline config YAML"),
+    ] = None,
+    n_patients: Annotated[
+        Optional[int],
+        typer.Option("--n-patients", "-n", help="Sample N patients from the dataset"),
+    ] = None,
+    output: Annotated[
+        Optional[Path],
+        typer.Option("--output", "-o", help="Path to write CSV (default: labels.csv)"),
+    ] = None,
+    seed: Annotated[
+        int, typer.Option("--seed", help="Random seed for patient sampling")
+    ] = 42,
+    categories: Annotated[
+        str,
+        typer.Option(
+            "--categories", help="Comma-separated label categories to include"
+        ),
+    ] = "clif_only,clif_partial",
+) -> None:
+    """Extract labels for a sample of patients and write to CSV.
+
+    Samples N patients from the hospitalization table, evaluates all
+    registered labels, and writes a flat CSV with one row per
+    (hospitalization_id, label) pair.
+
+    Example:
+        protoecg-pipeline labels --n-patients 100 --output labels.csv
+    """
+    import polars as pl
+
+    from clif_protoecg.data.loader import CLIFDataLoader
+    from clif_protoecg.labels.evaluator import LabelEvaluator
+
+    cfg = _load_config(config)
+    if n_patients is not None:
+        cfg.data.output_dir = cfg.data.output_dir / f"n{n_patients}"
+    out_path = output or (cfg.processed_dir / "labels.csv")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    cat_list = [c.strip() for c in categories.split(",")]
+
+    loader = CLIFDataLoader(cfg.data.data_dir)
+    logger.info("Loading hospitalization table...")
+    hosp_df = loader.load("hospitalization")
+    logger.info(f"Loaded {len(hosp_df):,} hospitalizations")
+
+    # Sample patients
+    if n_patients is not None:
+        import random
+
+        random.seed(seed)
+        all_patient_ids = hosp_df["patient_id"].unique().sort().to_list()
+        sampled = random.sample(all_patient_ids, min(n_patients, len(all_patient_ids)))
+        hosp_df = hosp_df.filter(pl.col("patient_id").is_in(sampled))
+        logger.info(
+            f"Sampled {len(sampled):,} patients → {len(hosp_df):,} hospitalizations"
+        )
+
+    hosp_ids = hosp_df["hospitalization_id"].to_list()
+    logger.info(
+        f"Evaluating labels for {len(hosp_ids):,} hospitalizations (categories: {cat_list})..."
+    )
+
+    evaluator = LabelEvaluator(loader, categories=cat_list)
+    logger.info(f"Registered labels: {evaluator.label_names}")
+
+    results = evaluator.evaluate_batch(hosp_ids)
+
+    # Flatten to rows
+    rows = []
+    for hid, label_list in results.items():
+        for lbl in label_list:
+            rows.append(
+                {
+                    "hospitalization_id": hid,
+                    "label_code": lbl["code"],
+                    "time": lbl["time"],
+                }
+            )
+
+    df = (
+        pl.DataFrame(rows)
+        if rows
+        else pl.DataFrame(
+            schema={
+                "hospitalization_id": pl.Utf8,
+                "label_code": pl.Utf8,
+                "time": pl.Datetime,
+            }
+        )
+    )
+    df.write_csv(out_path)
+    logger.info(
+        f"Wrote {len(df):,} label events for {results.__len__():,} hospitalizations → {out_path}"
+    )
+
+    # Print a quick summary
+    if len(df) > 0:
+        with pl.Config(tbl_rows=-1):
+            summary = (
+                df.group_by("label_code")
+                .agg(pl.len().alias("n_hosps"))
+                .sort("n_hosps", descending=True)
+            )
+            logger.info("Label prevalence summary:\n" + str(summary))
+
+
 # ──────────────────────── Run All ──────────────────────────
 
 
 @app.command()
 def run_all(
     config: Annotated[
-        Optional[Path], typer.Option("--config", "-c", help="Path to pipeline config YAML")
+        Optional[Path],
+        typer.Option("--config", "-c", help="Path to pipeline config YAML"),
     ] = None,
 ) -> None:
     """Run the full pipeline: extract -> tokenize -> train -> evaluate."""
