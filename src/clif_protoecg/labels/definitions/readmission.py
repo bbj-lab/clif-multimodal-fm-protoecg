@@ -27,22 +27,23 @@ def _readmission(hosp_row: dict, tables: dict, days: int, code: str) -> dict | N
     return None
 
 
-@label(name="readmit_30d", token="LABEL//readmit_30d", category="clif_partial",
-       description="30-day readmission", source_tables=["clif_hospitalization"])
+@label(
+    name="readmit_30d",
+    token="LABEL//readmit_30d",
+    category="clif_partial",
+    description="30-day readmission",
+    source_tables=["clif_hospitalization"],
+)
 def compute_readmit_30d(hosp_row: dict, tables: dict, **kw) -> dict | None:
     return _readmission(hosp_row, tables, 30, "LABEL//readmit_30d")
 
 
-@label(name="readmit_7d", token="LABEL//readmit_7d", category="clif_partial",
-       description="7-day readmission", source_tables=["clif_hospitalization"])
+@label(
+    name="readmit_7d",
+    token="LABEL//readmit_7d",
+    category="clif_partial",
+    description="7-day readmission",
+    source_tables=["clif_hospitalization"],
+)
 def compute_readmit_7d(hosp_row: dict, tables: dict, **kw) -> dict | None:
     return _readmission(hosp_row, tables, 7, "LABEL//readmit_7d")
-
-
-@label(name="abnormal_troponin_30d", token="LABEL//abnormal_troponin_30d",
-       category="clif_partial",
-       description="Abnormal troponin within 30d of ECG",
-       source_tables=["clif_labs"])
-def compute_abnormal_troponin_30d(hosp_row: dict, tables: dict, **kw) -> dict | None:
-    # Stub: requires ECG timestamps, implement when ECG data is integrated
-    return None

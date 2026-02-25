@@ -19,10 +19,11 @@ dependencies = [
     "typer>=0.9",
     "rich>=13.0",
     "matplotlib>=3.7",
+    "clifpy>=0.3.9",
 ]
 
 [project.optional-dependencies]
-vllm = ["vllm>=0.3"]
+sglang = ["sglang[all]>=0.4"]
 wandb = ["wandb>=0.16"]
 dev = ["pytest>=7.0", "pytest-cov>=4.0"]
 

@@ -20,8 +20,19 @@ def compute_vasopressor(hosp_row: dict, tables: dict, **kw) -> dict | None:
         return None
     vaso = meds.filter(
         (pl.col("hospitalization_id") == hosp_row["hospitalization_id"])
-        & (pl.col("med_group") == "vasoactives")
-        & (~pl.col("mar_action_category").is_in(["stop", "paused", "held"]))
+        & (
+            pl.col("med_cateogry").is_in(
+                [
+                    "angiotensin",
+                    "dopamine",
+                    "epinephrine",
+                    "norepinephrine",
+                    "phenylephrine",
+                    "vasopressin",
+                ]
+            )
+        )
+        & (~pl.col("mar_action_category").is_in(["stop", "other"]))
     ).sort("admin_dttm")
     if len(vaso) > 0:
         return {"code": "LABEL//vasopressor", "time": vaso[0, "admin_dttm"]}

@@ -29,7 +29,10 @@ def compute_mortality(hosp_row: dict, **kw) -> dict | None:
 )
 def compute_mortality_or_hospice(hosp_row: dict, **kw) -> dict | None:
     if hosp_row.get("discharge_category") in ("Expired", "Hospice"):
-        return {"code": "LABEL//mortality_or_hospice", "time": hosp_row["discharge_dttm"]}
+        return {
+            "code": "LABEL//mortality_or_hospice",
+            "time": hosp_row["discharge_dttm"],
+        }
     return None
 
 
@@ -68,7 +71,8 @@ def compute_discharge_snf(hosp_row: dict, **kw) -> dict | None:
     source_tables=["clif_hospitalization"],
 )
 def compute_discharge_ltach(hosp_row: dict, **kw) -> dict | None:
-    if hosp_row.get("discharge_category") == "LTACH":
+    cat = hosp_row.get("discharge_category") or ""
+    if "LTACH" in cat:
         return {"code": "LABEL//discharge_ltach", "time": hosp_row["discharge_dttm"]}
     return None
 

@@ -7,8 +7,13 @@ import polars as pl
 from clif_protoecg.labels.base import label
 
 
-@label(name="dnr", token="LABEL//dnr", category="clif_only",
-       description="Transition to DNR/DNAR/CMO", source_tables=["clif_code_status"])
+@label(
+    name="dnr",
+    token="LABEL//dnr",
+    category="clif_only",
+    description="Transition to DNR/DNAR/CMO",
+    source_tables=["clif_code_status"],
+)
 def compute_dnr(hosp_row: dict, tables: dict, **kw) -> dict | None:
     cs = tables.get("clif_code_status", pl.DataFrame())
     if len(cs) == 0:
@@ -32,7 +37,7 @@ def compute_dnr(hosp_row: dict, tables: dict, **kw) -> dict | None:
         return None
 
     # Look for transition from Full to DNR/DNAR/CMO
-    dnr_categories = {"DNR", "DNAR", "CMO", "Comfort Measures Only"}
+    dnr_categories = {"DNR", "DNAR", "UDNR", "DNR/DNI", "DNAR/DNI", "AND"}
     for row in rows.iter_rows(named=True):
         cat = row.get("code_status_category", "")
         if cat in dnr_categories:
