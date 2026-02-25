@@ -505,6 +505,13 @@ def tokenize(
             "--n-patients", "-n", help="Use output dir for N-patient test run"
         ),
     ] = None,
+    show_examples: Annotated[
+        bool,
+        typer.Option(
+            "--show-examples",
+            help="Print 3 detokenized timeline examples (50-100 tokens)",
+        ),
+    ] = False,
 ) -> None:
     """Step 5: Build vocabulary and tokenize event sequences to token IDs."""
     from clif_protoecg.data.split import SplitInfo
@@ -562,6 +569,30 @@ def tokenize(
     logger.info(
         f"Tokenized {n} sequences -> {cfg.tokenized_dir / 'all_tokens.parquet'}"
     )
+
+    # Show example detokenized timelines if requested
+    if show_examples:
+        import polars as pl
+
+        df = pl.read_parquet(cfg.tokenized_dir / "all_tokens.parquet")
+        logger.info("─" * 60)
+        logger.info("Example detokenized timelines (50-100 tokens):")
+        # Find sequences with 50-100 tokens
+        candidates = [
+            (row["hospitalization_id"], row["token_ids"])
+            for row in df.iter_rows(named=True)
+            if 50 <= len(row["token_ids"]) <= 100
+        ]
+        examples = candidates[:3] if len(candidates) >= 3 else candidates
+        for i, (hid, token_ids) in enumerate(examples, 1):
+            decoded = vocab.decode(token_ids)
+            logger.info(
+                f"\n[Example {i}] hospitalization_id={hid}, {len(token_ids)} tokens:"
+            )
+            logger.info(decoded)
+        if not examples:
+            logger.warning("No sequences found with 50-100 tokens")
+        logger.info("─" * 60)
 
 
 # ──────────────────────── Step 6: Train ──────────────────────────
