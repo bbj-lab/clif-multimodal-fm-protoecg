@@ -21,7 +21,7 @@ def compute_vasopressor(hosp_row: dict, tables: dict, **kw) -> dict | None:
     vaso = meds.filter(
         (pl.col("hospitalization_id") == hosp_row["hospitalization_id"])
         & (
-            pl.col("med_cateogry").is_in(
+            pl.col("med_category").is_in(
                 [
                     "angiotensin",
                     "dopamine",
