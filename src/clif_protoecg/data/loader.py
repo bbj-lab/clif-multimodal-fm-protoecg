@@ -11,21 +11,23 @@ from clif_protoecg.utils.logging import get_logger
 logger = get_logger("loader")
 
 # Tables small enough to load eagerly (< ~10M rows)
-_EAGER_TABLES = frozenset({
-    "patient",
-    "hospitalization",
-    "adt",
-    "medication_admin_continuous",
-    "medication_admin_intermittent",
-    "respiratory_support",
-    "patient_assessments",
-    "code_status",
-    "position",
-    "hospital_diagnosis",
-    "patient_procedures",
-    "crrt_therapy",
-    "ecmo_mcs",
-})
+_EAGER_TABLES = frozenset(
+    {
+        "patient",
+        "hospitalization",
+        "adt",
+        "medication_admin_continuous",
+        "medication_admin_intermittent",
+        "respiratory_support",
+        "patient_assessments",
+        "code_status",
+        "position",
+        "hospital_diagnosis",
+        "patient_procedures",
+        "crrt_therapy",
+        "ecmo_mcs",
+    }
+)
 
 # Large tables that benefit from lazy scanning
 _LAZY_TABLES = frozenset({"vitals", "labs"})
@@ -75,9 +77,7 @@ class CLIFDataLoader:
         Loads lazy tables (vitals, labs) once filtered to the given IDs,
         and partitions all tables by hospitalization_id for O(1) lookups.
         """
-        tables_to_preload = [
-            t for t in self.CLIF_TABLES if t != "patient"
-        ]
+        tables_to_preload = [t for t in self.CLIF_TABLES if t != "patient"]
         for name in tables_to_preload:
             try:
                 if name in _LAZY_TABLES:
@@ -89,14 +89,14 @@ class CLIFDataLoader:
                     )
                     self._cache[name] = df
                     self._filtered_cache[name] = df
-                    logger.info(
-                        f"  Preloaded {name}: {len(df):,} rows"
-                    )
+                    logger.info(f"  Preloaded {name}: {len(df):,} rows")
                 else:
                     logger.info(f"  Loading {name}...")
                     full_df = self.load(name)
                     if id_column in full_df.columns:
-                        df = full_df.filter(pl.col(id_column).is_in(hospitalization_ids))
+                        df = full_df.filter(
+                            pl.col(id_column).is_in(hospitalization_ids)
+                        )
                         self._filtered_cache[name] = df
                     else:
                         df = full_df
@@ -140,7 +140,10 @@ class CLIFDataLoader:
 
             # If requesting all/most data, filter the cached DataFrame
             # instead of concatenating thousands of tiny DataFrames
-            if n_requested >= n_partitioned * 0.5 and table_name in self._filtered_cache:
+            if (
+                n_requested >= n_partitioned * 0.5
+                and table_name in self._filtered_cache
+            ):
                 if n_requested >= n_partitioned:
                     return self._filtered_cache[table_name]
                 return self._filtered_cache[table_name].filter(
@@ -163,8 +166,10 @@ class CLIFDataLoader:
                 .collect()
             )
 
-        # Eager table: filter cached DataFrame
+        # Eager table: filter cached DataFrame (only if the id column exists)
         df = self.load(table_name)
+        if id_column not in df.columns:
+            return df
         return df.filter(pl.col(id_column).is_in(hospitalization_ids))
 
     def get_patient_ids(self) -> list[str]:

@@ -19,38 +19,47 @@ def _get_resp(hosp_row: dict, tables: dict) -> pl.DataFrame:
     ).sort("recorded_dttm")
 
 
-@label(name="mech_vent", token="LABEL//mech_vent", category="clif_only",
-       description="Mechanical ventilation", source_tables=["clif_respiratory_support"])
+@label(
+    name="mech_vent",
+    token="LABEL//mech_vent_trach",
+    category="clif_only",
+    description="New intubation (tracheostomy)",
+    source_tables=["clif_respiratory_support"],
+)
 def compute_mech_vent(hosp_row: dict, tables: dict, **kw) -> dict | None:
     resp = _get_resp(hosp_row, tables)
-    imv = resp.filter(pl.col("device_category") == "IMV")
+    imv = resp.filter(
+        (pl.col("device_category") == "IMV") & (pl.col("tracheostomy") == 1)
+    )
     if len(imv) > 0:
         return {"code": "LABEL//mech_vent", "time": imv[0, "recorded_dttm"]}
     return None
 
 
-@label(name="new_intubation", token="LABEL//new_intubation", category="clif_only",
-       description="New intubation (non-tracheostomy)", source_tables=["clif_respiratory_support"])
+@label(
+    name="new_intubation",
+    token="LABEL//mech_vent_no_trach",
+    category="clif_only",
+    description="New intubation (non-tracheostomy)",
+    source_tables=["clif_respiratory_support"],
+)
 def compute_new_intubation(hosp_row: dict, tables: dict, **kw) -> dict | None:
     resp = _get_resp(hosp_row, tables)
-    if len(resp) == 0:
-        return None
-    # IMV without tracheostomy
-    cols = resp.columns
-    if "tracheostomy" in cols:
-        imv = resp.filter(
-            (pl.col("device_category") == "IMV") & (pl.col("tracheostomy") == False)
-        )
-    else:
-        imv = resp.filter(pl.col("device_category") == "IMV")
+    imv = resp.filter(
+        (pl.col("device_category") == "IMV") & (pl.col("tracheostomy") == 0)
+    )
     if len(imv) > 0:
         return {"code": "LABEL//new_intubation", "time": imv[0, "recorded_dttm"]}
     return None
 
 
-@label(name="nippv", token="LABEL//nippv", category="clif_only",
-       description="Non-invasive positive pressure ventilation",
-       source_tables=["clif_respiratory_support"])
+@label(
+    name="nippv",
+    token="LABEL//nippv",
+    category="clif_only",
+    description="Non-invasive positive pressure ventilation",
+    source_tables=["clif_respiratory_support"],
+)
 def compute_nippv(hosp_row: dict, tables: dict, **kw) -> dict | None:
     resp = _get_resp(hosp_row, tables)
     nippv = resp.filter(pl.col("device_category") == "NIPPV")
@@ -59,9 +68,13 @@ def compute_nippv(hosp_row: dict, tables: dict, **kw) -> dict | None:
     return None
 
 
-@label(name="hfnc", token="LABEL//hfnc", category="clif_only",
-       description="High flow nasal cannula",
-       source_tables=["clif_respiratory_support"])
+@label(
+    name="hfnc",
+    token="LABEL//hfnc",
+    category="clif_only",
+    description="High flow nasal cannula",
+    source_tables=["clif_respiratory_support"],
+)
 def compute_hfnc(hosp_row: dict, tables: dict, **kw) -> dict | None:
     resp = _get_resp(hosp_row, tables)
     hf = resp.filter(pl.col("device_category") == "High Flow NC")
@@ -70,9 +83,13 @@ def compute_hfnc(hosp_row: dict, tables: dict, **kw) -> dict | None:
     return None
 
 
-@label(name="resp_escalation", token="LABEL//resp_escalation", category="clif_only",
-       description="Rapid respiratory escalation (>=2 severity levels in 24h)",
-       source_tables=["clif_respiratory_support"])
+@label(
+    name="resp_escalation",
+    token="LABEL//resp_escalation",
+    category="clif_only",
+    description="Rapid respiratory escalation (>=2 severity levels in 24h)",
+    source_tables=["clif_respiratory_support"],
+)
 def compute_resp_escalation(hosp_row: dict, tables: dict, **kw) -> dict | None:
     resp = _get_resp(hosp_row, tables)
     if len(resp) < 2:
@@ -87,8 +104,13 @@ def compute_resp_escalation(hosp_row: dict, tables: dict, **kw) -> dict | None:
     return None
 
 
-@label(name="high_fio2", token="LABEL//high_fio2", category="clif_only",
-       description="FiO2 > 0.6", source_tables=["clif_respiratory_support"])
+@label(
+    name="high_fio2",
+    token="LABEL//high_fio2",
+    category="clif_only",
+    description="FiO2 > 0.6",
+    source_tables=["clif_respiratory_support"],
+)
 def compute_high_fio2(hosp_row: dict, tables: dict, **kw) -> dict | None:
     resp = _get_resp(hosp_row, tables)
     if "fio2_set" not in resp.columns:
@@ -99,8 +121,13 @@ def compute_high_fio2(hosp_row: dict, tables: dict, **kw) -> dict | None:
     return None
 
 
-@label(name="hypoxemia", token="LABEL//hypoxemia", category="clif_only",
-       description="SpO2 < 88%", source_tables=["clif_vitals"])
+@label(
+    name="hypoxemia",
+    token="LABEL//hypoxemia",
+    category="clif_only",
+    description="SpO2 < 88%",
+    source_tables=["clif_vitals"],
+)
 def compute_hypoxemia(hosp_row: dict, tables: dict, **kw) -> dict | None:
     vitals = tables.get("clif_vitals", pl.DataFrame())
     if len(vitals) == 0:
@@ -115,8 +142,13 @@ def compute_hypoxemia(hosp_row: dict, tables: dict, **kw) -> dict | None:
     return None
 
 
-@label(name="prone", token="LABEL//prone", category="clif_only",
-       description="Prone positioning", source_tables=["clif_position"])
+@label(
+    name="prone",
+    token="LABEL//prone",
+    category="clif_only",
+    description="Prone positioning",
+    source_tables=["clif_position"],
+)
 def compute_prone(hosp_row: dict, tables: dict, **kw) -> dict | None:
     pos = tables.get("clif_position", pl.DataFrame())
     if len(pos) == 0:
@@ -130,9 +162,13 @@ def compute_prone(hosp_row: dict, tables: dict, **kw) -> dict | None:
     return None
 
 
-@label(name="reintubation_48h", token="LABEL//reintubation_48h", category="clif_only",
-       description="Reintubation within 48h of extubation",
-       source_tables=["clif_respiratory_support"])
+@label(
+    name="reintubation_48h",
+    token="LABEL//reintubation_48h",
+    category="clif_only",
+    description="Reintubation within 48h of extubation",
+    source_tables=["clif_respiratory_support"],
+)
 def compute_reintubation(hosp_row: dict, tables: dict, **kw) -> dict | None:
     resp = _get_resp(hosp_row, tables)
     if len(resp) < 3:
@@ -145,7 +181,10 @@ def compute_reintubation(hosp_row: dict, tables: dict, **kw) -> dict | None:
             if last_imv_end is not None:
                 gap = r["recorded_dttm"] - last_imv_end
                 if gap <= timedelta(hours=48):
-                    return {"code": "LABEL//reintubation_48h", "time": r["recorded_dttm"]}
+                    return {
+                        "code": "LABEL//reintubation_48h",
+                        "time": r["recorded_dttm"],
+                    }
             last_imv_end = None
         else:
             # Transition from IMV to non-IMV
