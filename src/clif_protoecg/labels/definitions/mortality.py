@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import polars as pl
-
 from clif_protoecg.labels.base import label
 
 

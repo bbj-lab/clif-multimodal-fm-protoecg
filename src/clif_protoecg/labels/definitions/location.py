@@ -74,7 +74,10 @@ def _prolonged_icu(hosp_row: dict, tables: dict, hours: int) -> dict | None:
         total += out_t - in_t
         if total >= timedelta(hours=hours):
             threshold_time = in_t + (timedelta(hours=hours) - (total - (out_t - in_t)))
-            return {"code": f"LABEL//prolonged_icu_{hours // 24}d", "time": threshold_time}
+            return {
+                "code": f"LABEL//prolonged_icu_{hours // 24}d",
+                "time": threshold_time,
+            }
     return None
 
 

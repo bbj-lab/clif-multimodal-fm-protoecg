@@ -36,9 +36,9 @@ def build_hospitalization_sequence(
 
     if patient_row is None:
         patient_df = loader.load("patient")
-        patient_row = patient_df.filter(
-            pl.col("patient_id") == patient_id
-        ).row(0, named=True)
+        patient_row = patient_df.filter(pl.col("patient_id") == patient_id).row(
+            0, named=True
+        )
 
     admit = hosp_row["admission_dttm"]
     discharge = hosp_row["discharge_dttm"]
@@ -48,17 +48,10 @@ def build_hospitalization_sequence(
     # 1. Demographics
     events.extend(_extract_demographics(hosp_row, patient_row, admit))
 
-    # 2. POA diagnoses
-    events.extend(_extract_poa_diagnoses(loader, hospitalization_id, admit))
-
     # 3-14. Clinical events
     events.extend(_extract_adt(loader, hospitalization_id))
-    events.extend(
-        _extract_vitals(loader, hospitalization_id, code_profile, bin_edges)
-    )
-    events.extend(
-        _extract_labs(loader, hospitalization_id, code_profile, bin_edges)
-    )
+    events.extend(_extract_vitals(loader, hospitalization_id, code_profile, bin_edges))
+    events.extend(_extract_labs(loader, hospitalization_id, code_profile, bin_edges))
     events.extend(
         _extract_meds_continuous(loader, hospitalization_id, code_profile, bin_edges)
     )
@@ -118,9 +111,7 @@ def _code_included(code: str, profile: CodeProfile) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _extract_demographics(
-    hosp: dict, patient: dict, admit: datetime
-) -> list[dict]:
+def _extract_demographics(hosp: dict, patient: dict, admit: datetime) -> list[dict]:
     events = []
     age = hosp.get("age_at_admission")
     if age is not None:
@@ -134,21 +125,6 @@ def _extract_demographics(
     if race:
         events.append(_evt(admit, f"DEMO//RACE_{race}"))
 
-    return events
-
-
-def _extract_poa_diagnoses(
-    loader: CLIFDataLoader, hosp_id: str, admit: datetime
-) -> list[dict]:
-    poa = loader.load_for_hospitalizations(
-        "hospital_diagnosis", [hosp_id]
-    ).filter(
-        pl.col("poa_present") == 1
-    ).sort("diagnosis_primary", descending=True)
-
-    events = []
-    for row in poa.iter_rows(named=True):
-        events.append(_evt(admit, f"ICD_POA//{row['diagnosis_code']}"))
     return events
 
 
@@ -227,9 +203,7 @@ def _extract_meds_continuous(
     profile: CodeProfile,
     bin_edges: BinEdges,
 ) -> list[dict]:
-    meds = loader.load_for_hospitalizations(
-        "medication_admin_continuous", [hosp_id]
-    )
+    meds = loader.load_for_hospitalizations("medication_admin_continuous", [hosp_id])
     events = []
     for row in meds.iter_rows(named=True):
         cat = row["med_category"]
@@ -258,9 +232,7 @@ def _extract_meds_intermittent(
     profile: CodeProfile,
     bin_edges: BinEdges,
 ) -> list[dict]:
-    meds = loader.load_for_hospitalizations(
-        "medication_admin_intermittent", [hosp_id]
-    )
+    meds = loader.load_for_hospitalizations("medication_admin_intermittent", [hosp_id])
     events = []
     for row in meds.iter_rows(named=True):
         cat = row["med_category"]

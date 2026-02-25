@@ -12,9 +12,9 @@ from pydantic import BaseModel, Field
 class DataConfig(BaseModel):
     """Paths to CLIF data and ECG prototypes."""
 
-    data_dir: Path = Path("./data")
-    ecg_csv: Path = Path("./data/ecg_prototypes_with_shifted_dates.csv")
-    output_dir: Path = Path("./data/processed")
+    data_dir: Path = Path("/home/code/clif-multimodal-fm-protoecg/data")
+    ecg_csv: Path = data_dir / Path("ecg_prototypes_with_shifted_dates.csv")
+    output_dir: Path = Path("/home/code/clif-multimodal-fm-protoecg/data/processed")
     id_mapping_path: Path | None = None
 
 
